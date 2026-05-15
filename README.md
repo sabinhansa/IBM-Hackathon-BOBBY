@@ -21,9 +21,17 @@ BobFlow is a **strategic demonstration** of IBM Bob's multi-modal capabilities, 
 
 ## 🚀 Live Demo
 
-**Live Site**: [https://hansasabin.github.io/IBM-Hackathon-BOBBY/](https://hansasabin.github.io/IBM-Hackathon-BOBBY/)
+**Demo Site (GitHub Pages)**: [https://hansasabin.github.io/IBM-Hackathon-BOBBY/](https://hansasabin.github.io/IBM-Hackathon-BOBBY/)
+- Static demo with sample reports
+- No API key required
+- Perfect for presentations and showcasing
 
-> **Note**: The site will be live once you push to GitHub and enable GitHub Pages. See [deployment instructions](#github-pages-deployment) below.
+**Live API Site (Vercel)**: Deploy your own with live IBM Bob integration
+- Real-time repository analysis
+- Secure server-side API key handling
+- Full workflow functionality
+
+> **Important**: GitHub Pages can only run demo mode. For live API functionality, deploy to Vercel.
 
 ## 🛠️ Tech Stack
 
@@ -45,6 +53,24 @@ BobFlow is a **strategic demonstration** of IBM Bob's multi-modal capabilities, 
 | **Risk Review** | Review Mode | Identify risky code and security concerns |
 | **PR Pack Generator** | Code Mode | Generate complete PR documentation |
 | **Bob Evidence Center** | All Modes | View Bob task sessions and transparency |
+
+## 🎮 Demo vs Live Mode
+
+BobFlow supports two modes of operation:
+
+### 🎨 Demo Mode (Default)
+- **What it is**: Static sample reports showcasing workflow outputs
+- **Use case**: GitHub Pages deployment, presentations, demos
+- **Requirements**: None - works out of the box
+- **Security**: Completely safe - no API keys needed
+
+### ⚡ Live Mode (Optional)
+- **What it is**: Real-time analysis using IBM Bob API
+- **Use case**: Production use with actual repositories
+- **Requirements**: IBM Bob API key, Vercel or similar serverless platform
+- **Security**: API keys stored server-side only, never exposed to browser
+
+**Important**: GitHub Pages alone cannot securely run live mode because it cannot hide API keys. You must use a serverless platform like Vercel for live mode.
 
 ## 🏃 Local Development Setup
 
@@ -83,36 +109,253 @@ BobFlow is a **strategic demonstration** of IBM Bob's multi-modal capabilities, 
 - `npm run preview` - Preview production build locally
 - `npm run lint` - Run ESLint
 
-## 🌐 GitHub Pages Deployment
+## 🔑 Vercel Deployment (Live Mode)
+
+BobFlow is designed as a **Vercel-first** application for secure live API functionality. Follow these steps to deploy with full IBM Bob integration:
+
+### Prerequisites
+
+1. **GitHub Account**: Your code repository
+2. **Vercel Account**: Sign up at [vercel.com](https://vercel.com)
+3. **IBM Bob API Key**: Obtain from IBM Bob platform
+
+### Quick Deploy to Vercel
+
+#### Option 1: Vercel Dashboard (Recommended)
+
+1. **Push to GitHub**
+   ```bash
+   git add .
+   git commit -m "Ready for Vercel deployment"
+   git push origin main
+   ```
+
+2. **Import to Vercel**
+   - Go to [vercel.com/new](https://vercel.com/new)
+   - Click "Import Git Repository"
+   - Select your `IBM-Hackathon-BOBBY` repository
+   - Click "Import"
+
+3. **Configure Build Settings**
+   - Framework Preset: **Vite**
+   - Build Command: `npm run build`
+   - Output Directory: `dist`
+   - Install Command: `npm install`
+
+4. **Add Environment Variables**
+   Click "Environment Variables" and add:
+   
+   | Name | Value | Environment |
+   |------|-------|-------------|
+   | `BOB_API_KEY` | `your_actual_bob_api_key_here` | Production, Preview, Development |
+   | `VITE_ENABLE_LIVE_MODE` | `true` | Production, Preview, Development |
+   | `BOB_API_ENDPOINT` | `https://api.bob.ibm.com/v1` | Production (optional) |
+
+   **🔒 Security Critical**:
+   - `BOB_API_KEY` has NO `VITE_` prefix - keeps it server-side only
+   - Never expose API keys in frontend code
+   - Vercel encrypts environment variables
+
+5. **Deploy**
+   - Click "Deploy"
+   - Wait for build to complete (~2-3 minutes)
+   - Your app will be live at `https://your-project.vercel.app`
+
+#### Option 2: Vercel CLI
+
+```bash
+# Install Vercel CLI globally
+npm i -g vercel
+
+# Login to Vercel
+vercel login
+
+# Deploy (follow prompts)
+vercel
+
+# Add environment variables
+vercel env add BOB_API_KEY
+# Enter your IBM Bob API key when prompted
+# Select: Production, Preview, Development
+
+vercel env add VITE_ENABLE_LIVE_MODE
+# Enter: true
+# Select: Production, Preview, Development
+
+# Deploy to production
+vercel --prod
+```
+
+### Verify Deployment
+
+1. **Check Health Endpoint**
+   ```bash
+   curl https://your-project.vercel.app/api/health
+   ```
+   
+   Should return:
+   ```json
+   {
+     "ok": true,
+     "status": "healthy",
+     "config": {
+       "apiKeyConfigured": true,
+       "liveModeEnabled": true
+     }
+   }
+   ```
+
+2. **Test Live Analysis**
+   - Visit your deployed URL
+   - Navigate to "Repo Onboarding" workflow
+   - You should see "Live Analysis" panel
+   - Enter a repository URL and test
+
+### Local Development with Vercel
+
+To test the full stack locally:
+
+```bash
+# 1. Create .env file (see ENV_SETUP.md for template)
+cat > .env << 'EOF'
+BOB_API_KEY=your_actual_bob_api_key_here
+VITE_ENABLE_LIVE_MODE=true
+EOF
+
+# 2. Install Vercel CLI
+npm i -g vercel
+
+# 3. Link to your Vercel project
+vercel link
+
+# 4. Pull environment variables from Vercel
+vercel env pull
+
+# 5. Start Vercel dev server (runs both frontend and API)
+vercel dev
+```
+
+The app will run at `http://localhost:3000` with full API functionality.
+
+### Completing the IBM Bob API Integration
+
+The serverless function at [`api/run-workflow.ts`](api/run-workflow.ts) includes a complete structure with a **TODO placeholder** for the actual IBM Bob API call.
+
+**To complete the integration:**
+
+1. Open [`api/run-workflow.ts`](api/run-workflow.ts:135)
+2. Find the `callBobAPI` function (line 135)
+3. Replace the placeholder with actual IBM Bob API calls
+4. Use the commented example code as a starting point
+
+**Example implementation:**
+```typescript
+async function callBobAPI(
+  workflowMode: string,
+  prompt: string,
+  repoUrl: string,
+  branch: string
+): Promise<string> {
+  const apiKey = process.env.BOB_API_KEY;
+  const apiEndpoint = process.env.BOB_API_ENDPOINT || 'https://api.bob.ibm.com/v1';
+
+  if (!apiKey) {
+    throw new Error('BOB_API_KEY not configured');
+  }
+
+  const response = await fetch(`${apiEndpoint}/chat`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      mode: workflowMode,
+      prompt: prompt,
+      context: {
+        repository: repoUrl,
+        branch: branch
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Bob API error: ${error.message || response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.content || data.response || '';
+}
+```
+
+**What you need from IBM Bob API documentation:**
+- Exact endpoint URL format
+- Authentication method (Bearer token, API key header, etc.)
+- Request body schema
+- Response body schema
+- Error response format
+
+### Troubleshooting
+
+**"API key not configured" error:**
+- Verify `BOB_API_KEY` is set in Vercel dashboard
+- Check environment variable name (no `VITE_` prefix)
+- Redeploy after adding environment variables
+
+**Live mode not showing:**
+- Verify `VITE_ENABLE_LIVE_MODE=true` in Vercel
+- Clear browser cache
+- Check browser console for errors
+
+**API calls failing:**
+- Check `/api/health` endpoint
+- Verify Bob API endpoint URL
+- Review Vercel function logs in dashboard
+- Ensure API key is valid and has correct permissions
+
+## 🌐 GitHub Pages Deployment (Demo Mode Only)
+
+GitHub Pages is perfect for showcasing BobFlow with static sample reports, but **cannot run live API mode** securely.
 
 ### Automatic Deployment
 
-The project is configured for automatic deployment to GitHub Pages:
+1. **Enable GitHub Pages**
+   - Go to repository Settings → Pages
+   - Source: Deploy from a branch
+   - Branch: `gh-pages` or `main`
+   - Folder: `/` (root) or `/docs`
 
-1. Push to `main` branch
-2. GitHub Actions workflow builds the project
-3. Deploys to GitHub Pages automatically
+2. **Push to trigger deployment**
+   ```bash
+   git add .
+   git commit -m "Deploy to GitHub Pages"
+   git push origin main
+   ```
 
-### Manual Deployment
+3. **Access your site**
+   - URL: `https://hansasabin.github.io/IBM-Hackathon-BOBBY/`
+   - Demo mode with sample reports
+   - No API key required
+
+### Manual Build
 
 ```bash
-# Build the project
+# Build for GitHub Pages
 npm run build
 
-# The dist/ folder contains the production build
-# Deploy dist/ to GitHub Pages
+# The dist/ folder contains the static site
+# Commit and push dist/ or use gh-pages branch
 ```
 
-### Configuration
+### Why GitHub Pages Can't Run Live Mode
 
-The project is configured for GitHub Pages in [`vite.config.ts`](vite.config.ts:6):
+- GitHub Pages serves only static files
+- No server-side code execution
+- No secure environment variable storage
+- API keys would be exposed in browser JavaScript
 
-```typescript
-export default defineConfig({
-  base: '/IBM-Hackathon-BOBBY/',  // Repository name
-  // ...
-})
-```
+**For live API functionality, use Vercel deployment above.**
 
 ## 📁 Project Structure
 
@@ -167,6 +410,28 @@ BobFlow demonstrates **meaningful IBM Bob usage** across all development phases:
 4. **Review Phase** (Review Mode)
    - Code quality checks
    - Security review
+
+### Live API Integration
+
+BobFlow includes a complete API infrastructure for live analysis:
+
+**Backend** ([`/api`](api/)):
+- Vercel serverless function at `/api/run-workflow`
+- Secure server-side API key handling
+- Workflow-specific prompt templates
+- Comprehensive error handling
+
+**Frontend** ([`/src`](src/)):
+- `LiveAnalysisPanel` component for user input
+- API client utilities with validation
+- Loading and error states
+- Seamless integration with existing UI
+
+**Security Features**:
+- ✅ API keys never exposed to browser
+- ✅ Server-side only authentication
+- ✅ Input validation and sanitization
+- ✅ Clear error messages without leaking sensitive info
 ## 🤖 Optional: Bob Shell Local Automation
 
 **For power users who want to automate workflows locally**
@@ -235,6 +500,12 @@ For full setup instructions, security guidelines, and advanced usage:
 **For the Hackathon Demo:**
 The static app demonstrates workflow **outputs**. The runner shows how workflows **could be automated** for teams who want local integration.
 
+### Live Mode vs Shell Integration
+
+- **Live Mode**: Web-based, user-friendly, requires Vercel deployment
+- **Shell Integration**: CLI-based, automation-focused, runs locally
+- Both use IBM Bob, but through different interfaces
+
    - Best practices enforcement
 
 ### Evidence of Bob Usage
@@ -286,11 +557,39 @@ See [`ROADMAP.md`](ROADMAP.md) for detailed development plan.
 
 ## 🔒 Security & Privacy
 
-- ✅ No API keys in repository
-- ✅ Environment variables only
+### Demo Mode (GitHub Pages)
+- ✅ No API keys required
+- ✅ No server-side processing
+- ✅ Completely static and safe
+- ✅ No user data collection
+
+### Live Mode (Vercel)
+- ✅ API keys stored server-side only
+- ✅ Never exposed to browser/frontend
+- ✅ Environment variables for secrets
 - ✅ `.bobignore` excludes sensitive files
-- ✅ No user data collection in demo
-- ✅ Local processing only
+- ✅ Input validation and sanitization
+- ✅ Secure HTTPS endpoints
+
+### Why API Keys Cannot Be in Frontend
+
+**The Problem**:
+- Vite bundles all `VITE_*` environment variables into the browser JavaScript
+- Anyone can view browser source code and extract API keys
+- This would expose your IBM Bob API key to the world
+
+**The Solution**:
+- API keys use NO `VITE_` prefix (e.g., `BOB_API_KEY`)
+- Keys stay server-side in Vercel serverless functions
+- Frontend calls `/api/run-workflow` endpoint
+- Endpoint authenticates with Bob API using server-side key
+- Browser never sees the API key
+
+**Security Checklist**:
+- ✅ Use `BOB_API_KEY` (not `VITE_BOB_API_KEY`)
+- ✅ Store in Vercel environment variables
+- ✅ Never commit `.env` to git
+- ✅ Review [`ENV_SETUP.md`](ENV_SETUP.md) for full guide
 
 ## 🤝 Contributing
 
