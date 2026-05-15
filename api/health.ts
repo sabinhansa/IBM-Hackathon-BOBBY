@@ -22,7 +22,7 @@ export default async function handler(
 
   const apiKey = process.env.BOB_API_KEY;
   const apiEndpoint = process.env.BOB_API_ENDPOINT || 'https://api.bob.ibm.com/v1';
-  const liveModeEnabled = process.env.VITE_ENABLE_LIVE_MODE === 'true';
+  const liveModeEnabled = true;
 
   // Check if API key is configured (but never expose its value!)
   const isApiKeyConfigured = !!apiKey && apiKey.length > 0 && apiKey !== 'your_bob_api_key_here';

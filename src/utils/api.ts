@@ -31,8 +31,7 @@ function getApiBaseUrl(): string {
  * Check if live mode is enabled
  */
 export function isLiveModeEnabled(): boolean {
-  const enabled = import.meta.env.VITE_ENABLE_LIVE_MODE;
-  return enabled === 'true' || enabled === true;
+  return true;
 }
 
 /**

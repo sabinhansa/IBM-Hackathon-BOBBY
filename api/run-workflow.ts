@@ -25,6 +25,11 @@ interface WorkflowResponse {
   error?: string;
 }
 
+interface RepoContext {
+  summary: string;
+  filesAnalyzed: number;
+}
+
 // Workflow prompt templates
 const WORKFLOW_PROMPTS: Record<string, { mode: string; prompt: (repo: string, branch: string) => string }> = {
   'repo-onboarding': {
@@ -103,90 +108,311 @@ Format as markdown suitable for a GitHub PR description.`
   }
 };
 
-/**
- * Bob API Adapter
- * 
- * TODO: Replace this stub with actual IBM Bob API integration
- * 
- * This function should:
- * 1. Authenticate with IBM Bob API using BOB_API_KEY
- * 2. Send the prompt to Bob in the appropriate mode
- * 3. Wait for Bob's response
- * 4. Return the generated content
- * 
- * Example integration (pseudocode):
- * 
- * const bobClient = new BobClient({
- *   apiKey: process.env.BOB_API_KEY,
- *   endpoint: process.env.BOB_API_ENDPOINT
- * });
- * 
- * const response = await bobClient.chat({
- *   mode: workflowMode,
- *   prompt: prompt,
- *   context: {
- *     repository: repoUrl,
- *     branch: branch
- *   }
- * });
- * 
- * return response.content;
- */
+function normalizeBranch(branch: string): string {
+  return branch.trim() || 'main';
+}
+
+function parseGitHubRepo(repoUrl: string): { owner: string; repo: string } | null {
+  try {
+    const url = new URL(repoUrl);
+    if (url.hostname !== 'github.com') {
+      return null;
+    }
+
+    const [owner, rawRepo] = url.pathname.split('/').filter(Boolean);
+    if (!owner || !rawRepo) {
+      return null;
+    }
+
+    return {
+      owner,
+      repo: rawRepo.replace(/\.git$/, ''),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function shouldIncludeFile(path: string): boolean {
+  const lower = path.toLowerCase();
+  const allowedExtensions = [
+    '.md',
+    '.json',
+    '.ts',
+    '.tsx',
+    '.js',
+    '.jsx',
+    '.py',
+    '.go',
+    '.java',
+    '.cs',
+    '.rb',
+    '.php',
+    '.yml',
+    '.yaml',
+    '.toml',
+    '.rs',
+    '.swift',
+  ];
+
+  if (
+    lower.includes('/node_modules/') ||
+    lower.includes('/dist/') ||
+    lower.includes('/build/') ||
+    lower.includes('/.git/') ||
+    lower.includes('/coverage/') ||
+    lower.endsWith('package-lock.json')
+  ) {
+    return false;
+  }
+
+  return allowedExtensions.some((extension) => lower.endsWith(extension));
+}
+
+function prioritizeFile(path: string): number {
+  const lower = path.toLowerCase();
+
+  if (lower === 'readme.md') return 0;
+  if (lower === 'package.json') return 1;
+  if (lower.includes('src/app.') || lower.includes('src/main.')) return 2;
+  if (lower.includes('api/') || lower.includes('server/')) return 3;
+  if (lower.includes('routes') || lower.includes('pages')) return 4;
+  if (lower.endsWith('.md')) return 5;
+  return 10;
+}
+
+async function fetchText(url: string): Promise<string | null> {
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'text/plain, application/json',
+      'User-Agent': 'BobFlow-Hackathon-Demo',
+    },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return response.text();
+}
+
+async function fetchGitHubContext(repoUrl: string, branch: string): Promise<RepoContext> {
+  const repoInfo = parseGitHubRepo(repoUrl);
+  if (!repoInfo) {
+    return {
+      summary: `Repository URL: ${repoUrl}\nAutomatic file fetching is currently available for public GitHub repositories only.`,
+      filesAnalyzed: 0,
+    };
+  }
+
+  const treeUrl = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`;
+  const treeResponse = await fetch(treeUrl, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'BobFlow-Hackathon-Demo',
+    },
+  });
+
+  if (!treeResponse.ok) {
+    throw new Error(`Could not read GitHub repository tree (${treeResponse.status}). Make sure the repo is public and the branch exists.`);
+  }
+
+  const treeData = await treeResponse.json();
+  const files = (treeData.tree || [])
+    .filter((item: any) => item.type === 'blob' && typeof item.path === 'string')
+    .map((item: any) => item.path as string)
+    .filter(shouldIncludeFile)
+    .sort((a: string, b: string) => prioritizeFile(a) - prioritizeFile(b) || a.localeCompare(b))
+    .slice(0, 24);
+
+  const chunks: string[] = [
+    `Repository: ${repoUrl}`,
+    `Branch: ${branch}`,
+    `Selected files: ${files.join(', ') || 'none'}`,
+  ];
+
+  let filesAnalyzed = 0;
+  for (const filePath of files) {
+    const rawUrl = `https://raw.githubusercontent.com/${repoInfo.owner}/${repoInfo.repo}/${encodeURIComponent(branch)}/${filePath
+      .split('/')
+      .map(encodeURIComponent)
+      .join('/')}`;
+    const content = await fetchText(rawUrl);
+
+    if (!content) {
+      continue;
+    }
+
+    filesAnalyzed += 1;
+    chunks.push(`\n--- FILE: ${filePath} ---\n${content.slice(0, 6000)}`);
+  }
+
+  return {
+    summary: chunks.join('\n'),
+    filesAnalyzed,
+  };
+}
+
+function buildBobPrompt(
+  workflowMode: string,
+  prompt: string,
+  repoContext: RepoContext
+): string {
+  return `You are IBM Bob running in ${workflowMode} mode for BobFlow, a hackathon demo.
+
+Use the repository context below to produce the requested workflow output.
+Return only a polished markdown report. Do not mention missing API keys, implementation details, or that you are an API.
+
+REQUEST:
+${prompt}
+
+REPOSITORY CONTEXT:
+${repoContext.summary}`;
+}
+
+function buildCandidateEndpoints(baseEndpoint: string): string[] {
+  const trimmed = baseEndpoint.replace(/\/+$/, '');
+  const endpoints = new Set<string>();
+
+  endpoints.add(trimmed);
+
+  if (!trimmed.endsWith('/chat/completions')) {
+    endpoints.add(`${trimmed}/chat/completions`);
+  }
+
+  if (!trimmed.endsWith('/inference')) {
+    endpoints.add(`${trimmed}/inference`);
+  }
+
+  if (!trimmed.endsWith('/chat')) {
+    endpoints.add(`${trimmed}/chat`);
+  }
+
+  return Array.from(endpoints);
+}
+
+function extractBobContent(data: any): string {
+  const candidates = [
+    data?.content,
+    data?.response,
+    data?.output,
+    data?.text,
+    data?.message,
+    data?.result?.content,
+    data?.result?.response,
+    data?.choices?.[0]?.message?.content,
+    data?.choices?.[0]?.text,
+    data?.data?.content,
+    data?.data?.response,
+  ];
+
+  const content = candidates.find((value) => typeof value === 'string' && value.trim().length > 0);
+  if (!content) {
+    throw new Error('Bob API returned a response, but no text content field was recognized.');
+  }
+
+  return content;
+}
+
 async function callBobAPI(
   workflowMode: string,
   prompt: string,
   repoUrl: string,
   branch: string
-): Promise<string> {
+): Promise<{ content: string; filesAnalyzed: number }> {
   const apiKey = process.env.BOB_API_KEY;
   const apiEndpoint = process.env.BOB_API_ENDPOINT || 'https://api.bob.ibm.com/v1';
+  const model = process.env.BOB_API_MODEL || 'bob';
+  const teamId = process.env.BOB_TEAM_ID || process.env.BOB_API_TEAM_ID;
 
   if (!apiKey) {
     throw new Error('BOB_API_KEY environment variable is not configured. Please set it in your deployment platform or .env file.');
   }
 
-  // TODO: Implement actual IBM Bob API call
-  // This is a placeholder that returns an error message
-  // Replace with real API integration when Bob API details are available
-  
-  throw new Error(
-    'IBM Bob API integration not yet implemented. ' +
-    'Please implement the callBobAPI function with actual Bob API calls. ' +
-    'See TODO comments in api/run-workflow.ts for integration guidance.'
-  );
+  const repoContext = await fetchGitHubContext(repoUrl, branch);
+  const bobPrompt = buildBobPrompt(workflowMode, prompt, repoContext);
+  const endpoints = buildCandidateEndpoints(apiEndpoint);
+  const requestBodies = [
+    {
+      model,
+      mode: workflowMode,
+      messages: [{ role: 'user', content: bobPrompt }],
+      temperature: 0.2,
+    },
+    {
+      model,
+      chat_mode: workflowMode,
+      prompt: bobPrompt,
+      temperature: 0.2,
+    },
+    {
+      mode: workflowMode,
+      input: bobPrompt,
+    },
+  ];
 
-  // Example of what the real implementation might look like:
-  /*
-  try {
-    const response = await fetch(`${apiEndpoint}/chat`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        mode: workflowMode,
-        prompt: prompt,
-        context: {
-          repository: repoUrl,
-          branch: branch
-        }
-      })
-    });
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    'X-API-Key': apiKey,
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`Bob API error: ${error.message || response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.content || data.response || '';
-  } catch (error) {
-    console.error('Bob API call failed:', error);
-    throw error;
+  if (teamId) {
+    headers['X-Bob-Team-Id'] = teamId;
+    headers['X-Team-Id'] = teamId;
   }
-  */
+
+  const errors: string[] = [];
+
+  for (const endpoint of endpoints) {
+    for (const body of requestBodies) {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      const rawText = await response.text();
+      let data: any = rawText;
+
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        data = rawText;
+      }
+
+      if (!response.ok) {
+        const message =
+          typeof data === 'string'
+            ? data.slice(0, 240)
+            : data?.error?.message || data?.message || response.statusText;
+        errors.push(`${endpoint} -> ${response.status}: ${message}`);
+        continue;
+      }
+
+      const content = typeof data === 'string' ? data : extractBobContent(data);
+      return {
+        content,
+        filesAnalyzed: repoContext.filesAnalyzed,
+      };
+    }
+  }
+
+  throw new Error(
+    `Bob API request failed. Set BOB_API_ENDPOINT to the exact IBM Bob inference endpoint if your account uses a custom URL. Last attempts: ${errors
+      .slice(-3)
+      .join(' | ')}`
+  );
 }
+
+/*
+  The adapter above keeps BOB_API_KEY server-side and supports common inference
+  response shapes. If IBM Bob gives you an exact endpoint/schema, set:
+  - BOB_API_ENDPOINT
+  - BOB_API_MODEL if required
+  - BOB_TEAM_ID if you created a general API key that requires a team header
+*/
 
 /**
  * Vercel Serverless Function Handler
@@ -210,7 +436,7 @@ export default async function handler(
   try {
     // Parse and validate request body
     const body = req.body as WorkflowRequest;
-    const { workflowId, repoUrl, branch = 'main', changedFiles = [], options = {} } = body;
+    const { workflowId, repoUrl, branch = 'main' } = body;
 
     // Validate required fields
     if (!workflowId) {
@@ -250,12 +476,16 @@ export default async function handler(
     }
 
     // Generate prompt for this workflow
-    const prompt = workflowConfig.prompt(repoUrl, branch);
+    const normalizedBranch = normalizeBranch(branch);
+    const prompt = workflowConfig.prompt(repoUrl, normalizedBranch);
 
     // Call Bob API
     let content: string;
+    let filesAnalyzed = 0;
     try {
-      content = await callBobAPI(workflowConfig.mode, prompt, repoUrl, branch);
+      const result = await callBobAPI(workflowConfig.mode, prompt, repoUrl, normalizedBranch);
+      content = result.content;
+      filesAnalyzed = result.filesAnalyzed;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       res.status(503).json({
@@ -278,8 +508,9 @@ export default async function handler(
       content,
       metadata: {
         repository: repoUrl,
-        branch,
+        branch: normalizedBranch,
         mode: 'live',
+        filesAnalyzed,
         duration
       }
     };
