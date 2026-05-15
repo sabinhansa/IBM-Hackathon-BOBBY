@@ -11,7 +11,7 @@ import BobEvidence from './pages/BobEvidence';
 
 function App() {
   return (
-    <Router basename="/IBM-Hackathon-BOBBY">
+    <Router>
       <Layout>
         <Routes>
           <Route path="/" element={<Dashboard />} />
