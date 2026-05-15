@@ -1,0 +1,217 @@
+import { AlertTriangle, ArrowLeft, Sparkles, Shield, XCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { riskReport } from '../data/sampleReports';
+
+export default function RiskReview() {
+  const handleDownload = () => {
+    const content = JSON.stringify(riskReport, null, 2);
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'risk-review.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case 'critical': return 'bg-red-100 text-red-800 border-red-300';
+      case 'high': return 'bg-orange-100 text-orange-800 border-orange-300';
+      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      case 'low': return 'bg-blue-100 text-blue-800 border-blue-300';
+      default: return 'bg-gray-100 text-gray-800 border-gray-300';
+    }
+  };
+
+  const getSeverityIcon = (severity: string) => {
+    switch (severity) {
+      case 'critical':
+      case 'high':
+        return <XCircle className="h-5 w-5" />;
+      default:
+        return <AlertTriangle className="h-5 w-5" />;
+    }
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <Link to="/" className="inline-flex items-center text-primary-600 hover:text-primary-700 mb-6">
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Back to Dashboard
+      </Link>
+
+      <div className="bg-white rounded-lg shadow-md p-8 mb-6">
+        <div className="flex items-center space-x-4 mb-6">
+          <div className="bg-red-100 p-3 rounded-lg">
+            <AlertTriangle className="h-8 w-8 text-red-600" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Risk Review</h1>
+            <p className="text-gray-600">Identify risky code areas and security concerns</p>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-200 pt-6">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
+            <div className="flex items-start space-x-3">
+              <Sparkles className="h-5 w-5 text-red-600 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-red-900 mb-2">Bob Mode: Review Mode</h3>
+                <p className="text-sm text-red-800">
+                  Bob performs comprehensive risk assessment identifying security vulnerabilities, code quality issues, 
+                  performance bottlenecks, and maintainability concerns with prioritized remediation steps.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* What This Workflow Does */}
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">What This Workflow Does</h2>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <h4 className="font-semibold text-gray-900 mb-2">Input</h4>
+                <ul className="space-y-2 text-sm text-gray-700">
+                  <li className="flex items-start">
+                    <span className="text-red-600 mr-2">•</span>
+                    <span>Repository codebase</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="text-red-600 mr-2">•</span>
+                    <span>Configuration files</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="text-red-600 mr-2">•</span>
+                    <span>Dependencies and packages</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <h4 className="font-semibold text-gray-900 mb-2">Output</h4>
+                <ul className="space-y-2 text-sm text-gray-700">
+                  <li className="flex items-start">
+                    <span className="text-red-600 mr-2">•</span>
+                    <span>Security vulnerabilities</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="text-red-600 mr-2">•</span>
+                    <span>Code quality issues</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="text-red-600 mr-2">•</span>
+                    <span>Performance bottlenecks</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="text-red-600 mr-2">•</span>
+                    <span>Prioritized remediation steps</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* Summary Stats */}
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Risk Assessment Summary</h2>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 text-center">
+                <div className="text-2xl font-bold text-gray-900">{riskReport.summary.totalIssues}</div>
+                <div className="text-sm text-gray-600">Total Issues</div>
+              </div>
+              <div className="bg-red-50 rounded-lg p-4 border border-red-200 text-center">
+                <div className="text-2xl font-bold text-red-600">{riskReport.summary.critical}</div>
+                <div className="text-sm text-gray-600">Critical</div>
+              </div>
+              <div className="bg-orange-50 rounded-lg p-4 border border-orange-200 text-center">
+                <div className="text-2xl font-bold text-orange-600">{riskReport.summary.high}</div>
+                <div className="text-sm text-gray-600">High</div>
+              </div>
+              <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200 text-center">
+                <div className="text-2xl font-bold text-yellow-600">{riskReport.summary.medium}</div>
+                <div className="text-sm text-gray-600">Medium</div>
+              </div>
+              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 text-center">
+                <div className="text-2xl font-bold text-blue-600">{riskReport.summary.low}</div>
+                <div className="text-sm text-gray-600">Low</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Risk Items */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">Identified Risks</h2>
+              <button
+                onClick={handleDownload}
+                className="inline-flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm"
+              >
+                <Shield className="h-4 w-4" />
+                <span>Download Report</span>
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {riskReport.risks.map((risk, index) => (
+                <div key={index} className="bg-white border-2 rounded-lg p-5 hover:shadow-md transition-shadow" style={{
+                  borderColor: risk.severity === 'critical' ? '#fca5a5' :
+                               risk.severity === 'high' ? '#fdba74' :
+                               risk.severity === 'medium' ? '#fde047' : '#93c5fd'
+                }}>
+                  <div className="flex items-start space-x-3">
+                    <div className={`mt-0.5 ${
+                      risk.severity === 'critical' ? 'text-red-600' :
+                      risk.severity === 'high' ? 'text-orange-600' :
+                      risk.severity === 'medium' ? 'text-yellow-600' :
+                      'text-blue-600'
+                    }`}>
+                      {getSeverityIcon(risk.severity)}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <h3 className="font-semibold text-gray-900">{risk.title}</h3>
+                        <span className={`px-2 py-1 rounded text-xs font-bold border-2 ${getSeverityColor(risk.severity)}`}>
+                          {risk.severity.toUpperCase()}
+                        </span>
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200">
+                          {risk.category}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-700 mb-3">{risk.description}</p>
+                      <div className="bg-gray-50 rounded p-3 mb-3">
+                        <p className="text-xs font-medium text-gray-600 mb-1">Location:</p>
+                        <code className="text-xs text-gray-800">{risk.location}</code>
+                      </div>
+                      <div className="bg-green-50 rounded p-3 border border-green-200">
+                        <div className="flex items-start space-x-2">
+                          <Shield className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-xs font-medium text-green-900 mb-1">Recommendation:</p>
+                            <p className="text-sm text-green-800">{risk.recommendation}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Generated By */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <p className="text-sm text-gray-600 text-center">
+              Generated by {riskReport.generatedBy} • 
+              Repository: {riskReport.metadata?.repository} • 
+              Files analyzed: {riskReport.metadata?.filesAnalyzed}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Made with Bob
