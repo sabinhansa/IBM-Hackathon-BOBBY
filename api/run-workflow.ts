@@ -30,6 +30,20 @@ interface RepoContext {
   filesAnalyzed: number;
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const cause = (error as Error & { cause?: unknown }).cause;
+    const causeMessage =
+      cause && typeof cause === 'object' && 'message' in cause
+        ? String((cause as { message?: unknown }).message)
+        : '';
+
+    return causeMessage ? `${error.message}: ${causeMessage}` : error.message;
+  }
+
+  return String(error);
+}
+
 // Workflow prompt templates
 const WORKFLOW_PROMPTS: Record<string, { mode: string; prompt: (repo: string, branch: string) => string }> = {
   'repo-onboarding': {
@@ -182,12 +196,18 @@ function prioritizeFile(path: string): number {
 }
 
 async function fetchText(url: string): Promise<string | null> {
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'text/plain, application/json',
-      'User-Agent': 'BobFlow-Hackathon-Demo',
-    },
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      headers: {
+        Accept: 'text/plain, application/json',
+        'User-Agent': 'BobFlow-Hackathon-Demo',
+      },
+    });
+  } catch (error) {
+    throw new Error(`Could not fetch repository file from GitHub raw content: ${getErrorMessage(error)}`);
+  }
 
   if (!response.ok) {
     return null;
@@ -206,12 +226,18 @@ async function fetchGitHubContext(repoUrl: string, branch: string): Promise<Repo
   }
 
   const treeUrl = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`;
-  const treeResponse = await fetch(treeUrl, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      'User-Agent': 'BobFlow-Hackathon-Demo',
-    },
-  });
+  let treeResponse: Response;
+
+  try {
+    treeResponse = await fetch(treeUrl, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'BobFlow-Hackathon-Demo',
+      },
+    });
+  } catch (error) {
+    throw new Error(`Could not reach GitHub API while reading repository tree: ${getErrorMessage(error)}`);
+  }
 
   if (!treeResponse.ok) {
     throw new Error(`Could not read GitHub repository tree (${treeResponse.status}). Make sure the repo is public and the branch exists.`);
@@ -367,11 +393,18 @@ async function callBobAPI(
 
   for (const endpoint of endpoints) {
     for (const body of requestBodies) {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-      });
+      let response: Response;
+
+      try {
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        });
+      } catch (error) {
+        errors.push(`${endpoint} -> network error: ${getErrorMessage(error)}`);
+        continue;
+      }
 
       const rawText = await response.text();
       let data: any = rawText;
